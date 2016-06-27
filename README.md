@@ -1,5 +1,5 @@
-This repository has been depricated and will soon be closed
-
+This repository has been depricated
+===================================
 
 All of the examples on this repository have been moved to the [ble_examples](https://github.com/ti-simplelink/ble\_examples) repository.
 
