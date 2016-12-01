@@ -66,7 +66,7 @@
 
 #include "osal_snv.h"
 #include "ICallBleAPIMSG.h"
-
+#include <stdbool.h>
 /*********************************************************************
  * MACROS
  */
@@ -175,8 +175,8 @@ static uint8_t  gapRole_IRK[KEYLEN];
 static uint8_t  gapRole_SRK[KEYLEN];
 static uint32_t gapRole_signCounter;
 static uint8_t  gapRole_bdAddr[B_ADDR_LEN];
-static uint8_t  gapRole_AdvEnabled = TRUE;
-static uint8_t  gapRole_AdvNonConnEnabled = FALSE;
+static uint8_t  gapRole_AdvEnabled = 1;
+static uint8_t  gapRole_AdvNonConnEnabled = 0;
 static uint16_t gapRole_AdvertOffTime = DEFAULT_ADVERT_OFF_TIME;
 static uint8_t  gapRole_AdvertDataLen = 3;
 
@@ -189,7 +189,7 @@ static uint8_t  gapRole_AdvertData[B_MAX_ADV_LEN] =
   0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 };
 
-static uint8_t  gapRole_ScanRspDataLen = 0;
+static uint8_t  gapRole_ScanRspDataLen;
 static uint8_t  gapRole_ScanRspData[B_MAX_ADV_LEN] = {0};
 static uint8_t  gapRole_AdvEventType;
 static uint8_t  gapRole_AdvDirectType;
@@ -203,7 +203,7 @@ static uint16_t gapRole_MaxConnInterval = DEFAULT_MAX_CONN_INTERVAL;
 static uint16_t gapRole_SlaveLatency = MIN_SLAVE_LATENCY;
 static uint16_t gapRole_TimeoutMultiplier = DEFAULT_TIMEOUT_MULTIPLIER;
 
-static uint8_t  gapRoleMaxScanRes = 0;
+static uint8_t  gapRoleMaxScanRes ;
 
 // Application callbacks
 static gapRolesCBs_t *pGapRoles_AppCGs = NULL;
@@ -249,28 +249,31 @@ void gapRole_clockHandler(UArg a0);
  */
 bStatus_t GAPRole_SetParameter(uint16_t param, uint8_t len, void *pValue, uint8 connHandle)
 {
-  bStatus_t ret = SUCCESS;
+  bStatus_t Bstatus_ret = SUCCESS;
+  uint8_t oldAdvEnabled;
+  uint16_t latency;
+
   switch (param)
   {
     case GAPROLE_IRK:
       if (len == KEYLEN)
       {
-        VOID memcpy(gapRole_IRK, pValue, KEYLEN) ;
+        memcpy(gapRole_IRK, pValue, KEYLEN) ;
       }
       else
       {
-        ret = bleInvalidRange;
+        Bstatus_ret = bleInvalidRange;
       }
       break;
 
     case GAPROLE_SRK:
       if (len == KEYLEN)
       {
-        VOID memcpy(gapRole_SRK, pValue, KEYLEN) ;
+        memcpy(gapRole_SRK, pValue, KEYLEN) ;
       }
       else
       {
-        ret = bleInvalidRange;
+        Bstatus_ret = bleInvalidRange;
       }
       break;
 
@@ -281,7 +284,7 @@ bStatus_t GAPRole_SetParameter(uint16_t param, uint8_t len, void *pValue, uint8 
       }
       else
       {
-        ret = bleInvalidRange;
+        Bstatus_ret = bleInvalidRange;
       }
       break;
 
@@ -291,12 +294,13 @@ bStatus_t GAPRole_SetParameter(uint16_t param, uint8_t len, void *pValue, uint8 
         // Non-connectable advertising must be disabled.
         if (gapRole_AdvNonConnEnabled != TRUE)
         {
-          uint8_t oldAdvEnabled = gapRole_AdvEnabled;
+          oldAdvEnabled = gapRole_AdvEnabled;
           gapRole_AdvEnabled = *((uint8_t*)pValue);
 
           if ((oldAdvEnabled) && (gapRole_AdvEnabled == FALSE))
           {
-            return GAP_EndDiscoverable(selfEntity);
+            Bstatus_ret = GAP_EndDiscoverable(selfEntity);
+            return Bstatus_ret;
           }
           else if ((oldAdvEnabled == FALSE) && (gapRole_AdvEnabled))
           {
@@ -313,12 +317,12 @@ bStatus_t GAPRole_SetParameter(uint16_t param, uint8_t len, void *pValue, uint8 
         }
         else
         {
-          ret = bleIncorrectMode;
+          Bstatus_ret = bleIncorrectMode;
         }
       }
       else
       {
-        ret = bleInvalidRange;
+        Bstatus_ret = bleInvalidRange;
       }
       break;
       
@@ -328,12 +332,12 @@ bStatus_t GAPRole_SetParameter(uint16_t param, uint8_t len, void *pValue, uint8 
         // Connectable advertising must be disabled.
         if (gapRole_AdvEnabled != TRUE)
         {
-          uint8_t oldAdvEnabled = gapRole_AdvNonConnEnabled;
+          oldAdvEnabled = gapRole_AdvNonConnEnabled;
           gapRole_AdvNonConnEnabled = *((uint8_t*)pValue);
           
           if ((oldAdvEnabled) && (gapRole_AdvNonConnEnabled == FALSE))
           {
-            VOID GAP_EndDiscoverable(selfEntity);
+            GAP_EndDiscoverable(selfEntity);
           }
           else if ((oldAdvEnabled == FALSE) && (gapRole_AdvNonConnEnabled))
           {  //turnon advertising
@@ -342,12 +346,12 @@ bStatus_t GAPRole_SetParameter(uint16_t param, uint8_t len, void *pValue, uint8 
         }
         else
         {
-          ret = bleIncorrectMode;
+          Bstatus_ret = bleIncorrectMode;
         }
       }
       else
       {
-        ret = bleInvalidRange;
+        Bstatus_ret = bleInvalidRange;
       }
       break;
 
@@ -358,41 +362,42 @@ bStatus_t GAPRole_SetParameter(uint16_t param, uint8_t len, void *pValue, uint8 
       }
       else
       {
-        ret = bleInvalidRange;
+        Bstatus_ret = bleInvalidRange;
       }
       break;
 
     case GAPROLE_ADVERT_DATA:
       if (len <= B_MAX_ADV_LEN)
       {
-        VOID memset(gapRole_AdvertData, 0, B_MAX_ADV_LEN);
-        VOID memcpy(gapRole_AdvertData, pValue, len);
+        memset(gapRole_AdvertData, 0, B_MAX_ADV_LEN);
+        memcpy(gapRole_AdvertData, pValue, len);
         gapRole_AdvertDataLen = len;
         
         // Update the advertising data
-        ret = GAP_UpdateAdvertisingData(selfEntity,
+        Bstatus_ret = GAP_UpdateAdvertisingData(selfEntity,
                               TRUE, gapRole_AdvertDataLen, gapRole_AdvertData);
+      //API Exceptions 
       }
       else
       {
-        ret = bleInvalidRange;
+        Bstatus_ret = bleInvalidRange;
       }
       break;
 
     case GAPROLE_SCAN_RSP_DATA:
       if (len <= B_MAX_ADV_LEN)
       {
-        VOID memset(gapRole_ScanRspData, 0, B_MAX_ADV_LEN);
-        VOID memcpy(gapRole_ScanRspData, pValue, len);
+        memset(gapRole_ScanRspData, 0, B_MAX_ADV_LEN);
+        memcpy(gapRole_ScanRspData, pValue, len);
         gapRole_ScanRspDataLen = len;
         
         // Update the Response Data
-        ret = GAP_UpdateAdvertisingData(selfEntity,
+        Bstatus_ret = GAP_UpdateAdvertisingData(selfEntity,
                               FALSE, gapRole_ScanRspDataLen, gapRole_ScanRspData);
       }
       else
       {
-        ret = bleInvalidRange;
+        Bstatus_ret = bleInvalidRange;
       }
       break;
 
@@ -403,7 +408,7 @@ bStatus_t GAPRole_SetParameter(uint16_t param, uint8_t len, void *pValue, uint8 
       }
       else
       {
-        ret = bleInvalidRange;
+        Bstatus_ret = bleInvalidRange;
       }
       break;
 
@@ -414,18 +419,18 @@ bStatus_t GAPRole_SetParameter(uint16_t param, uint8_t len, void *pValue, uint8 
       }
       else
       {
-        ret = bleInvalidRange;
+        Bstatus_ret = bleInvalidRange;
       }
       break;
 
     case GAPROLE_ADV_DIRECT_ADDR:
       if (len == B_ADDR_LEN)
       {
-        VOID memcpy(gapRole_AdvDirectAddr, pValue, B_ADDR_LEN) ;
+        memcpy(gapRole_AdvDirectAddr, pValue, B_ADDR_LEN) ;
       }
       else
       {
-        ret = bleInvalidRange;
+        Bstatus_ret = bleInvalidRange;
       }
       break;
 
@@ -436,7 +441,7 @@ bStatus_t GAPRole_SetParameter(uint16_t param, uint8_t len, void *pValue, uint8 
       }
       else
       {
-        ret = bleInvalidRange;
+        Bstatus_ret = bleInvalidRange;
       }
       break;
 
@@ -447,7 +452,7 @@ bStatus_t GAPRole_SetParameter(uint16_t param, uint8_t len, void *pValue, uint8 
       }
       else
       {
-        ret = bleInvalidRange;
+        Bstatus_ret = bleInvalidRange;
       }
       break;
 
@@ -462,7 +467,7 @@ bStatus_t GAPRole_SetParameter(uint16_t param, uint8_t len, void *pValue, uint8 
         }
         else
         {
-          ret = bleInvalidRange;
+          Bstatus_ret = bleInvalidRange;
         }
       }
       break;
@@ -478,21 +483,21 @@ bStatus_t GAPRole_SetParameter(uint16_t param, uint8_t len, void *pValue, uint8 
         }
         else
         {
-          ret = bleInvalidRange;
+          Bstatus_ret = bleInvalidRange;
         }
       }
       break;
 
     case GAPROLE_SLAVE_LATENCY:
       {
-        uint16_t latency = *((uint16_t*)pValue);
+        latency = *((uint16_t*)pValue);
         if (len == sizeof (uint16_t) && (latency < MAX_SLAVE_LATENCY))
         {
           gapRole_SlaveLatency = latency;
         }
         else
         {
-          ret = bleInvalidRange;
+          Bstatus_ret = bleInvalidRange;
         }
       }
       break;
@@ -507,7 +512,7 @@ bStatus_t GAPRole_SetParameter(uint16_t param, uint8_t len, void *pValue, uint8 
         }
         else
         {
-          ret = bleInvalidRange;
+          Bstatus_ret = bleInvalidRange;
         }
       }
       break;
@@ -519,7 +524,7 @@ bStatus_t GAPRole_SetParameter(uint16_t param, uint8_t len, void *pValue, uint8 
       }
       else
       {
-        ret = bleInvalidRange;
+        Bstatus_ret = bleInvalidRange;
       }
       break;        
   
@@ -527,16 +532,16 @@ bStatus_t GAPRole_SetParameter(uint16_t param, uint8_t len, void *pValue, uint8 
       // The param value isn't part of this profile, try the GAP.
       if ((param < TGAP_PARAMID_MAX) && (len == sizeof (uint16_t)))
       {
-        ret = GAP_SetParamValue(param, *((uint16_t*)pValue));
+        Bstatus_ret = GAP_SetParamValue(param, *((uint16_t*)pValue));
       }
       else
       {
-        ret = INVALIDPARAMETER;
+        Bstatus_ret = INVALIDPARAMETER;
       }
       break;
   }
 
-  return (ret);
+  return (Bstatus_ret);
 }
 
 /*********************************************************************
@@ -556,11 +561,11 @@ bStatus_t GAPRole_GetParameter(uint16_t param, void *pValue, uint8_t connHandle)
       break;
 
     case GAPROLE_IRK:
-      VOID memcpy(pValue, gapRole_IRK, KEYLEN) ;
+      memcpy(pValue, gapRole_IRK, KEYLEN) ;
       break;
 
     case GAPROLE_SRK:
-      VOID memcpy(pValue, gapRole_SRK, KEYLEN) ;
+      memcpy(pValue, gapRole_SRK, KEYLEN) ;
       break;
 
     case GAPROLE_SIGNCOUNTER:
@@ -568,7 +573,7 @@ bStatus_t GAPRole_GetParameter(uint16_t param, void *pValue, uint8_t connHandle)
       break;
 
     case GAPROLE_BD_ADDR:
-      VOID memcpy(pValue, gapRole_bdAddr, B_ADDR_LEN) ;
+      memcpy(pValue, gapRole_bdAddr, B_ADDR_LEN) ;
       break;
 
     case GAPROLE_ADVERT_ENABLED:
@@ -584,11 +589,11 @@ bStatus_t GAPRole_GetParameter(uint16_t param, void *pValue, uint8_t connHandle)
       break;
 
     case GAPROLE_ADVERT_DATA:
-      VOID memcpy(pValue , gapRole_AdvertData, gapRole_AdvertDataLen);
+      memcpy(pValue , gapRole_AdvertData, gapRole_AdvertDataLen);
       break;
 
     case GAPROLE_SCAN_RSP_DATA:
-      VOID memcpy(pValue, gapRole_ScanRspData, gapRole_ScanRspDataLen) ;
+      memcpy(pValue, gapRole_ScanRspData, gapRole_ScanRspDataLen) ;
       break;
 
     case GAPROLE_ADV_EVENT_TYPE:
@@ -600,7 +605,7 @@ bStatus_t GAPRole_GetParameter(uint16_t param, void *pValue, uint8_t connHandle)
       break;
 
     case GAPROLE_ADV_DIRECT_ADDR:
-      VOID memcpy(pValue, gapRole_AdvDirectAddr, B_ADDR_LEN) ;
+      memcpy(pValue, gapRole_AdvDirectAddr, B_ADDR_LEN) ;
       break;
 
     case GAPROLE_ADV_CHANNEL_MAP:
@@ -631,7 +636,7 @@ bStatus_t GAPRole_GetParameter(uint16_t param, void *pValue, uint8_t connHandle)
       index = gapRoleInfo_Find(connHandle); 
       if (index != 0xFF)
       {
-        VOID memcpy(pValue, multiConnInfo[index].gapRole_devAddr, B_ADDR_LEN) ;
+        memcpy(pValue, multiConnInfo[index].gapRole_devAddr, B_ADDR_LEN) ;
       }
       else
       {
@@ -782,8 +787,8 @@ static void gapRole_init(void)
   
   // Initialize the Profile Advertising and Connection Parameters
   gapRole_profileRole = GAP_PROFILE_PERIPHERAL | GAP_PROFILE_CENTRAL;
-  VOID memset(gapRole_IRK, 0, KEYLEN);
-  VOID memset(gapRole_SRK, 0, KEYLEN);
+  memset(gapRole_IRK, 0, KEYLEN);
+  memset(gapRole_SRK, 0, KEYLEN);
   gapRole_signCounter = 0;
   gapRole_AdvEventType = GAP_ADTYPE_ADV_IND;
   gapRole_AdvDirectType = ADDRTYPE_PUBLIC;
@@ -791,9 +796,9 @@ static void gapRole_init(void)
   gapRole_AdvFilterPolicy = GAP_FILTER_POLICY_ALL;
 
   // Restore Items from NV
-  VOID osal_snv_read(BLE_NVID_IRK, KEYLEN, gapRole_IRK);
-  VOID osal_snv_read(BLE_NVID_CSRK, KEYLEN, gapRole_SRK);
-  VOID osal_snv_read(BLE_NVID_SIGNCOUNTER, sizeof(uint32_t), 
+  osal_snv_read(BLE_NVID_IRK, KEYLEN, gapRole_IRK);
+  osal_snv_read(BLE_NVID_CSRK, KEYLEN, gapRole_SRK);
+  osal_snv_read(BLE_NVID_SIGNCOUNTER, sizeof(uint32_t), 
                      &gapRole_signCounter);
 }
 
